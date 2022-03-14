@@ -25,6 +25,7 @@ import scipy.sparse as sps
 from scipy.sparse.linalg.dsolve import linsolve
 import gradientLS as GLS
 import sys
+import sympy as sp
 
 # %% Fonctions Internes
 def compute_lengths_and_unit_vectors(pta, ptb, ptA, ptP):
@@ -144,12 +145,11 @@ def compare_RC(U_RC,U_AVG):
         
         if(diff[i_face]<eps): #Test réussi en dessous de la précision souhaitée
             test_result=True
-        else:
+        elif(diff[i_face]>eps):
             test_result=False
         
     return diff,test_result
 
-    
         
 # %% Classe
 class FVMMomentum:
@@ -489,6 +489,7 @@ class FVMMomentum:
             Vitesse débitante calculée avec la méthode Rhie Chow
             
         """
+        
         # Chercher les différentes variables
         mesh = self.get_mesh()          # Maillage utilisé
         centroids = self.centroids      # Chercher les centres des éléments
@@ -499,6 +500,32 @@ class FVMMomentum:
        
         #Initialisation des valeurs
         uf=np.zeros(mesh.get_number_of_faces())
+        
+        #Calcul de la pression et son gradient
+        x = sp.symbols('x')
+
+        # Pression Fonction
+        Pressure= - 2 * P * (x-1.0)
+        f_p = sp.lambdify([x], Pressure, "numpy")
+        
+        def p(x):
+            return f_p(x)
+        
+        def calcul_pressure(function,centroids):
+            pressure_field=np.zeros(len(centroids))
+            for i_elem in range(len(centroids)):
+                pressure_field[i_elem]= function(centroids[i_elem,0])
+                
+            return pressure_field
+        
+        #Pression Champ + Gradient
+        Pression=calcul_pressure(p,centroids) #Calcul au centre des éléments
+        bcdata_p = (['DIRICHLET', p], ['DIRICHLET', p],
+                    ['DIRICHLET', p], ['DIRICHLET', p])
+        
+        solver_GLS_pression = GLS.GradientLeastSquares(mesh, bcdata_p, centroids)
+        solver_GLS_pression.set_P(P)
+        GRAD=solver_GLS_pression.solve_pressure(Pression)
 
         # Parcours les faces internes et remplis la matrice A et le vecteur B
         for i_face in range(mesh.get_number_of_boundary_faces(), mesh.get_number_of_faces()):
@@ -518,12 +545,20 @@ class FVMMomentum:
             DVA=volumes[right_elem]/DAU[right_elem] #DVA/AA
             
             #Pression P= -2 param_P * x 
-            Pp=SGPXp[left_elem]*centroids[left_elem,0] # au centre de l elem P
-            Pa=SGPXp[right_elem]*centroids[right_elem,0] # au centre de l elem P
+            Pp=Pression[left_elem] # au centre de l elem P
+            Pa=Pression[right_elem] # au centre de l elem P
             
             #Gradient
-            gradPP=np.array((SGPXp[left_elem],SGPYp[left_elem]))#gradient de pression elem gauche
-            gradPA=np.array((SGPXp[right_elem],SGPYp[right_elem]))#gradient de pression elem droite
+            gradPP=GRAD[left_elem]#gradient de pression elem gauche
+            gradPA=GRAD[right_elem]#gradient de pression elem droite
+            
+            # #Pression P= -2 param_P * x 
+            # Pp=SGPXp[left_elem]*centroids[left_elem,0] # au centre de l elem P
+            # Pa=SGPXp[right_elem]*centroids[right_elem,0] # au centre de l elem P
+            
+            # #Gradient
+            # gradPP=np.array((SGPXp[left_elem],SGPYp[left_elem]))#gradient de pression elem gauche
+            # gradPA=np.array((SGPXp[right_elem],SGPYp[right_elem]))#gradient de pression elem droite
             
             #Vitesse
             Up=np.array((u[left_elem],v[left_elem]))
@@ -566,12 +601,14 @@ class FVMMomentum:
                 #Calcul de la vitesse débitante
                 DVP=volumes[element]/DAU[element] #DVP/AP
                 
-                #Pression P= -2 param_P * x 
-                Pp=SGPXp[left_elem]*centroids[left_elem,0]# au centre de l elem P
-                Ps=-2*P*xa # au centre de la face frontière
-                
-                #Gradient
-                gradPP=np.array((SGPXp[element],SGPYp[element]))#gradient de pression elem gauche
+                # #Pression P= -2 param_P * x 
+                Pp=Pression[left_elem] # au centre de l elem P
+                # Pp=SGPXp[left_elem]*centroids[left_elem,0]# au centre de l elem P
+                # Ps=-2*P*xa # au centre de la face frontière
+                Ps=p(xa) # au centre de la face frontière
+                # #Gradient
+                # gradPP=np.array((SGPXp[element],SGPYp[element]))#gradient de pression elem gauche
+                gradPP=GRAD[element]
                 
                 #Composante de uf (momentaire pour la lisibilité)
                 uf1=np.dot([u[element],v[element]],n) 

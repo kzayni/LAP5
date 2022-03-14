@@ -90,6 +90,7 @@ processing = Processing(case_classic, bcdata)
 processing.set_analytical_function((u, null))
 
 #%% Simulations
+
 print("Simulation avec P = 0,3 et un maillage QUAD/TRI")
 simulations_parameters = [{'mesh_type': 'QUAD', 'Nx': 8, 'Ny': 8, 'method': 'CENTRE', 'P': 0, 'alpha': 0.75},
                           {'mesh_type': 'TRI', 'Nx': 8, 'Ny': 8, 'method': 'CENTRE', 'P': 0, 'alpha': 0.75},
@@ -97,8 +98,6 @@ simulations_parameters = [{'mesh_type': 'QUAD', 'Nx': 8, 'Ny': 8, 'method': 'CEN
                           {'mesh_type': 'TRI', 'Nx': 8, 'Ny': 8, 'method': 'CENTRE', 'P': 3, 'alpha': 0.75}]
 postprocessing_parameters = {'pyvista': {'simulation': [0,1,2,3]}}
 execute(processing, simulations_parameters, postprocessing_parameters, sim_name="couetteclassic_paramP")
-
-
 
 
 
